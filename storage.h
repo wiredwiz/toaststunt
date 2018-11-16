@@ -137,7 +137,7 @@ free_str(const char *s)
  */
 #define memo_strlen(X)		((void)0, (((int *)(X))[-2]))
 #else
-#define memo_strlen(X)		strlen(X)
+#define memo_strlen(X)		utf8_strlen(X)
 
 #endif /* MEMO_STRLEN */
 

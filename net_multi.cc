@@ -263,25 +263,26 @@ pull_input(nhandle * h)
     char *ptr, *end;
 
     if ((count = read(h->rfd, buffer, sizeof(buffer))) > 0) {
-	if (h->binary) {
-	    stream_add_raw_bytes_to_binary(s, buffer, count);
-	    server_receive_line(h->shandle, reset_stream(s));
-	    h->last_input_was_CR = 0;
-	} else {
-	    for (ptr = buffer, end = buffer + count; ptr < end; ptr++) {
-		unsigned char c = *ptr;
-
-		if (isgraph(c) || c == ' ' || c == '\t')
-		    stream_add_char(s, c);
+        for (ptr = buffer, end = buffer + count; ptr < end; ptr++) {
+	    unsigned char c = *ptr;
+          if (!h->binary && c == '\n') 
+	    {
+		server_receive_line(h->shandle, reset_stream(s));
+	    }
 #ifdef INPUT_APPLY_BACKSPACE
 		else if (c == 0x08 || c == 0x7F)
 		    stream_delete_char(s);
 #endif
-		else if (c == '\r' || (c == '\n' && !h->last_input_was_CR))
-		    server_receive_line(h->shandle, reset_stream(s));
-
-		h->last_input_was_CR = (c == '\r');
+	    else if (c >= ' ') /* We don't want people typing control characters. */
+	    {
+		stream_add_char(s, c);
 	    }
+        }
+        if (h->binary)
+	{
+	    server_receive_line(h->shandle, reset_stream(s));
+	    h->last_input_was_CR = 0;
+
 	}
 	return 1;
     } else

@@ -43,6 +43,7 @@
 #include "utils.h"
 #include "waif.h"
 #include "version.h"
+#include "utf8.h"
 
 /* the following globals are the guts of the virtual machine: */
 static activation *activ_stack = 0;
@@ -1128,10 +1129,10 @@ do {								\
 			PUSH_ERROR_UNLESS_QUOTA(E_QUOTA);
 		    }
 		} else {	/* TYPE_STR */
-		    char *tmp_str = str_dup(list.v.str);
+ 		    char* tmp_str = str_dup(list.v.str);
 		    free_str(list.v.str);
-		    tmp_str[index.v.num - 1] = value.v.str[0];
-		    list.v.str = tmp_str;
+		    list.v.str = utf8_copyandset(tmp_str, index.v.num, value.v.str);
+		    free_str(tmp_str);
 		    free_var(value);
 		    PUSH(list);
 		}
@@ -1881,7 +1882,7 @@ do {								\
 		if (args.type != TYPE_LIST || verb.type != TYPE_STR)
 		    err = E_TYPE;
 		else if (obj.type == TYPE_WAIF) {
-			char *str = (char *)mymalloc(strlen(verb.v.str) + 2, M_STRING);
+			char *str = (char *)mymalloc(memo_strlen(verb.v.str) + 2, M_STRING);
 
 			_class = obj.v.waif->_class;
 			str[0] = WAIF_VERB_PREFIX;
