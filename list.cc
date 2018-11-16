@@ -589,7 +589,7 @@ bf_length(Var arglist, Byte next, void *vdata, Objid progr)
 	break;
     case TYPE_STR:
 	r.type = TYPE_INT;
-	r.v.num = memo_strlen(arglist.v.list[1].v.str);
+	r.v.num = utf8_strlen(arglist.v.list[1].v.str);
 	break;
     default:
 	free_var(arglist);

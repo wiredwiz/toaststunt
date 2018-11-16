@@ -21,6 +21,7 @@
 #include "my-string.h"
 
 #include "options.h"
+#include "utf8.h"
 
 /* See "Concurrent Cycle Collection in Reference Counted Systems",
  * (Bacon and Rajan, 2001) for a description of the cycle collection
@@ -137,7 +138,7 @@ free_str(const char *s)
  */
 #define memo_strlen(X)		((void)0, (((int *)(X))[-2]))
 #else
-#define memo_strlen(X)		utf8_strlen(X)
+#define memo_strlen(X)		strlen(X)
 
 #endif /* MEMO_STRLEN */
 

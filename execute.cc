@@ -1101,13 +1101,13 @@ do {								\
 		} else if ((list.type == TYPE_LIST
 		       && (index.v.num < 1 || index.v.num > list.v.list[0].v.num /* size */))
 			|| (list.type == TYPE_STR
-		       && (index.v.num < 1 || index.v.num > (int) memo_strlen(list.v.str)))) {
+		       && (index.v.num < 1 || index.v.num > (int) utf8_strlen(list.v.str)))) {
 		    free_var(value);
 		    free_var(index);
 		    free_var(list);
 		    PUSH_ERROR(E_RANGE);
 		} else if (list.type == TYPE_STR
-			   && memo_strlen(value.v.str) != 1) {
+			   && utf8_strlen(value.v.str) != 1) {
 		    free_var(value);
 		    free_var(index);
 		    free_var(list);
