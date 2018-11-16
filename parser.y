@@ -42,6 +42,7 @@
 #include "structures.h"
 #include "sym_table.h"
 #include "utils.h"
+#include "utf8.h"
 #include "version.h"
 
 static Stmt            *prog_start;
@@ -864,6 +865,7 @@ static int
 yylex(void)
 {
     int c;
+    int         utf8_bytes = 1;
 
     reset_stream(token_stream);
 
@@ -987,14 +989,24 @@ start_over:
 	}
 	return type;
     }
-    
-    if (isalpha(c) || c == '_') {
+   
+   utf8_bytes = 1;
+    if (isalpha(c) || c == '_' || (utf8_bytes = utf8_numbytes(c)) > 1) {
 	char	       *buf;
 	Keyword	       *k;
+        int i = 0;
 
-	stream_add_char(token_stream, c);
-	while (isalnum(c = lex_getc()) || c == '_')
-	    stream_add_char(token_stream, c);
+        do
+        {
+            for (i = 0; i < utf8_bytes; i++)
+            {
+                stream_add_char(token_stream, c);
+                c = lex_getc();
+            }
+            utf8_bytes = 1;
+        }
+	while (isalnum(c) || c == '_' || (utf8_bytes = utf8_numbytes(c)) > 1);
+
 	lex_ungetc(c);
 	buf = reset_stream(token_stream);
 
