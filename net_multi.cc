@@ -285,10 +285,6 @@ pull_input(nhandle * h)
                 else if (c == 0x08 || c == 0x7F)
                     stream_delete_char(s);
 #endif
-	    else if (c >= ' ') /* We don't want people typing control characters. */
-	    {
-		stream_add_char(s, c);
-	    }
                 else if (c == TN_IAC && ptr + 2 <= end) {
                     // Pluck a telnet IAC sequence out of the middle of the input
                     int telnet_counter = 1;
@@ -300,7 +296,7 @@ pull_input(nhandle * h)
                         while (cmd != TN_SE && ptr + telnet_counter <= end)
                             cmd = *(ptr + telnet_counter++);
 
-                            if (cmd == TN_SE) {
+                        if (cmd == TN_SE) {
                             // We got a complete option sequence.
                             stream_add_raw_bytes_to_binary(oob, ptr, telnet_counter);
                             ptr += --telnet_counter;
@@ -310,7 +306,9 @@ pull_input(nhandle * h)
                              * will get passed to do_out_of_band_command as gibberish. */
                         }
                     }
-                } else if ((c == '\r' || (c == '\n' && !h->last_input_was_CR)))
+                } else if (c >= ' ') /* We don't want people typing control characters. */
+                    stream_add_char(s, c);
+                else if ((c == '\r' || (c == '\n' && !h->last_input_was_CR)))
                     server_receive_line(h->shandle, reset_stream(s), 0);
 
                 h->last_input_was_CR = (c == '\r');
@@ -322,7 +320,6 @@ pull_input(nhandle * h)
                 free_stream(oob);
         }
         return 1;
->>>>>>> master
     } else
         return (count == 0 && !proto.believe_eof)
             || (count < 0 && (errno == eagain || errno == ewouldblock));
