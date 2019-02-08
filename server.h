@@ -68,7 +68,7 @@ extern void server_refuse_connection(server_listener l,
 				 * after server_refuse_connection() returns.
 				 */
 
-extern void server_receive_line(server_handle h, const char *line);
+extern void server_receive_line(server_handle h, const char *line, bool out_of_band);
 				/* The given line has been received as input
 				 * on the specified connection.  'line' does
 				 * not end in a newline; any such bytes have
@@ -244,7 +244,7 @@ enum Server_Option {
 #define server_int_option_cached(srvopt)   (_server_int_option_cache[srvopt])
 
 
-extern int32 _server_int_option_cache[]; /* private */
+extern Num _server_int_option_cache[]; /* private */
 
 
 
@@ -345,5 +345,7 @@ extern int read_active_connections(void);
 
 /* Called when a fatal error occurs. */
 extern void panic(const char *message);
+
+void set_system_object_integer_limits();
 
 #endif				/* Server_H */

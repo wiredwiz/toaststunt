@@ -9,10 +9,26 @@
 #include "server.h"         // panic()
 #include <sys/time.h>       // getrusage
 #include <sys/resource.h>   // getrusage
-#include <sys/sysinfo.h>    // CPU usage
+#ifndef __FreeBSD__
+    #include <sys/sysinfo.h>    // CPU usage
+#endif
 #include "extension-background.h"   // Threads
 #ifdef __MACH__
 #include <mach/clock.h>     // Millisecond time for OS X
+#endif
+
+/**
+* On FreeBSD, CLOCK_MONOTONIC_RAW is simply CLOCK_MONOTONIC
+*/
+#ifdef __FreeBSD__
+    #define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
+#endif
+/**
+* BSD doesn't support sysinfo.
+* There are probably other ways to get CPU info, but for the sake of compilation we'll just return all 0 for CPU usage on BSD for now.
+*/
+#ifdef __FreeBSD__
+    #define _MOO_NO_CPU_USAGE
 #endif
 
 /* Returns a float of the time (including milliseconds)
@@ -49,47 +65,42 @@ bf_ftime(Var arglist, Byte next, void *vdata, Objid progr)
     clock_gettime(clock_type, &ts);
 #endif
 
-    Var r = new_float((double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0);
+    Var r;
+    r.type = TYPE_FLOAT;
+    r.v.fnum = (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
 
     free_var(arglist);
     return make_var_pack(r);
 }
 
+/* Locate an object in the database by name more quickly than is possible in-DB. */
     static package
 bf_locate_by_name(Var arglist, Byte next, void *vdata, Objid progr)
 {
-
-    if(!is_wizard(progr))
+    if (!is_wizard(progr))
     {
         free_var(arglist);
         return make_error_pack(E_PERM);
     }
 
-    int x = 1, case_matters = 0;
-    Var ret = new_list(0), tmp, name;
+    Var ret = new_list(0), name, object;
+    object.type = TYPE_OBJ;
 
-    tmp.type = TYPE_OBJ;
+    int case_matters = is_true(arglist.v.list[2]);
+    int string_length = memo_strlen(arglist.v.list[1].v.str);
 
-    if (arglist.v.list[0].v.num == 2)
-        case_matters = is_true(arglist.v.list[2]);
-
-
-    for (x = 1; x < db_last_used_objid(); x++)
+    for (int x = 1; x < db_last_used_objid(); x++)
     {
-        if (valid(x))
-        {
-            db_find_property(Var::new_obj(x), "name", &name);
-            if (strindex(name.v.str, memo_strlen(name.v.str), arglist.v.list[1].v.str, memo_strlen(arglist.v.list[1].v.str), case_matters))
-            {
-                tmp.v.obj = x;
-                ret = listappend(ret, tmp);
-            }
-        }
+        if (!valid(x))
+            continue;
+
+        object.v.obj = x;
+        db_find_property(object, "name", &name);
+        if (strindex(name.v.str, memo_strlen(name.v.str), arglist.v.list[1].v.str, string_length, case_matters))
+            ret = listappend(ret, object);
     }
 
-    free_var(tmp);
     free_var(arglist);
-
     return make_var_pack(ret);
 }
 
@@ -109,7 +120,7 @@ bf_distance(Var arglist, Byte next, void *vdata, Objid progr)
         }
         else
         {
-            tmp = (arglist.v.list[2].v.list[count].type == TYPE_INT ? (double)arglist.v.list[2].v.list[count].v.num : *arglist.v.list[2].v.list[count].v.fnum) - (arglist.v.list[1].v.list[count].type == TYPE_INT ? (double)arglist.v.list[1].v.list[count].v.num : *arglist.v.list[1].v.list[count].v.fnum);
+            tmp = (arglist.v.list[2].v.list[count].type == TYPE_INT ? (double)arglist.v.list[2].v.list[count].v.num : arglist.v.list[2].v.list[count].v.fnum) - (arglist.v.list[1].v.list[count].type == TYPE_INT ? (double)arglist.v.list[1].v.list[count].v.num : arglist.v.list[1].v.list[count].v.fnum);
             ret = ret + (tmp * tmp);
         }
     }
@@ -117,7 +128,8 @@ bf_distance(Var arglist, Byte next, void *vdata, Objid progr)
     free_var(arglist);
 
     Var s;
-    s = new_float(sqrt(ret));
+    s.type = TYPE_FLOAT;
+    s.v.fnum = sqrt(ret);
 
     return make_var_pack(s);
 }
@@ -131,9 +143,9 @@ bf_relative_heading(Var arglist, Byte next, void *vdata, Objid progr)
         return make_error_pack(E_TYPE);
     }
 
-    double dx = *arglist.v.list[2].v.list[1].v.fnum - *arglist.v.list[1].v.list[1].v.fnum;
-    double dy = *arglist.v.list[2].v.list[2].v.fnum - *arglist.v.list[1].v.list[2].v.fnum;
-    double dz = *arglist.v.list[2].v.list[3].v.fnum - *arglist.v.list[1].v.list[3].v.fnum;
+    double dx = arglist.v.list[2].v.list[1].v.fnum - arglist.v.list[1].v.list[1].v.fnum;
+    double dy = arglist.v.list[2].v.list[2].v.fnum - arglist.v.list[1].v.list[2].v.fnum;
+    double dz = arglist.v.list[2].v.list[3].v.fnum - arglist.v.list[1].v.list[3].v.fnum;
 
     double xy = 0.0;
     double z = 0.0;
@@ -180,11 +192,16 @@ bf_memory_usage(Var arglist, Byte next, void *vdata, Objid progr)
     fclose(f);
 
     Var s = new_list(5);
-    s.v.list[1] = new_float(size);           // Total program size
-    s.v.list[2] = new_float(resident);       // Resident set size
-    s.v.list[3] = new_float(share);          // Shared pages from shared mappings
-    s.v.list[4] = new_float(text);           // Text (code)
-    s.v.list[5] = new_float(data);           // Data + stack
+    s.v.list[1].type = TYPE_FLOAT;
+    s.v.list[2].type = TYPE_FLOAT;
+    s.v.list[3].type = TYPE_FLOAT;
+    s.v.list[4].type = TYPE_FLOAT;
+    s.v.list[5].type = TYPE_FLOAT;
+    s.v.list[1].v.fnum = size;           // Total program size
+    s.v.list[2].v.fnum = resident;       // Resident set size
+    s.v.list[3].v.fnum = share;          // Shared pages from shared mappings
+    s.v.list[4].v.fnum = text;           // Text (code)
+    s.v.list[5].v.fnum = data;           // Data + stack
 
     return make_var_pack(s);
 }
@@ -208,21 +225,25 @@ bf_usage(Var arglist, Byte next, void *vdata, Objid progr)
         r.v.list[x].type = TYPE_INT;
 
     for (x = 1; x <= 3; x++)
-        cpu.v.list[x].type = TYPE_INT;
+        cpu.v.list[x] = Var::new_int(0); //initialize to all 0
 
+    #ifndef _MOO_NO_CPU_USAGE
     /*** Begin CPU load averages ***/
-    struct sysinfo sys_info;
-    int info_ret = sysinfo(&sys_info);
+        struct sysinfo sys_info;
+        int info_ret = sysinfo(&sys_info);
 
-    for (x = 0; x < 3; x++)
-        cpu.v.list[x+1].v.num = (info_ret != 0 ? 0 : sys_info.loads[x]);
-
+        for (x = 0; x < 3; x++)
+            cpu.v.list[x+1].v.num = (info_ret != 0 ? 0 : sys_info.loads[x]);
+    #endif
+    
     /*** Now rusage ***/
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
 
-    r.v.list[1] = new_float((double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / CLOCKS_PER_SEC);
-    r.v.list[2] = new_float((double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / CLOCKS_PER_SEC);
+    r.v.list[1].type = TYPE_FLOAT;
+    r.v.list[2].type = TYPE_FLOAT;
+    r.v.list[1].v.fnum =(double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / CLOCKS_PER_SEC;
+    r.v.list[2].v.fnum = (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / CLOCKS_PER_SEC;
     r.v.list[3].v.num = usage.ru_minflt;
     r.v.list[4].v.num = usage.ru_majflt;
     r.v.list[5].v.num = usage.ru_inblock;
@@ -263,15 +284,19 @@ bf_panic(Var arglist, Byte next, void *vdata, Objid progr)
     static package
 bf_frandom(Var arglist, Byte next, void *vdata, Objid progr)
 {
-    double fmin = (arglist.v.list[0].v.num > 1 ? *arglist.v.list[1].v.fnum : 0.0);
-    double fmax = (arglist.v.list[0].v.num > 1 ? *arglist.v.list[2].v.fnum : *arglist.v.list[1].v.fnum);
+    double fmin = (arglist.v.list[0].v.num > 1 ? arglist.v.list[1].v.fnum : 0.0);
+    double fmax = (arglist.v.list[0].v.num > 1 ? arglist.v.list[2].v.fnum : arglist.v.list[1].v.fnum);
 
     free_var(arglist);
 
     double f = (double)rand() / RAND_MAX;
     f = fmin + f * (fmax - fmin);
 
-    return make_var_pack(new_float(f));
+    Var ret;
+    ret.type = TYPE_FLOAT;
+    ret.v.fnum = f;
+
+    return make_var_pack(ret);
 
 }
 
@@ -279,11 +304,15 @@ bf_frandom(Var arglist, Byte next, void *vdata, Objid progr)
     static package
 bf_round(Var arglist, Byte next, void *vdata, Objid progr)
 {
-    double r = round((double)*arglist.v.list[1].v.fnum);
+    double r = round((double)arglist.v.list[1].v.fnum);
 
     free_var(arglist);
 
-    return make_var_pack(new_float(r));
+    Var ret;
+    ret.type = TYPE_FLOAT;
+    ret.v.fnum = r;
+
+    return make_var_pack(ret);
 }
 
 /* Return a list of substrings of an argument separated by a break. */
@@ -328,7 +357,7 @@ bf_explode(Var arglist, Byte next, void *vdata, Objid progr)
  * With only one argument, player flag is assumed to be the only condition.
  * With two arguments, parent is the only condition.
  * With three arguments, parent is checked first and then the player flag is checked.
- * get_players(LIST objects, OBJ parent, ?INT player flag set)
+ * occupants(LIST objects, OBJ parent, ?INT player flag set)
  */
 static package
 bf_occupants(Var arglist, Byte next, void *vdata, Objid progr)
@@ -353,6 +382,70 @@ bf_occupants(Var arglist, Byte next, void *vdata, Objid progr)
 
     free_var(arglist);
     return make_var_pack(ret);
+}
+
+/* Return a list of nested locations for an object
+ * For objects in $nothing (#-1), this returns an empty list.
+ * locations(OBJ object)
+ */
+static package
+bf_locations(Var arglist, Byte next, void *vdata, Objid progr)
+{    
+    Objid what = arglist.v.list[1].v.obj;
+
+    free_var(arglist);
+
+    if (!valid(what))
+        return make_error_pack(E_INVIND);
+
+    Var locs = new_list(0);
+
+    Objid loc = db_object_location(what);
+
+    while (valid(loc)) {
+        locs = setadd(locs, Var::new_obj(loc));
+        loc = db_object_location(loc);
+    }
+
+    return make_var_pack(locs);
+}
+
+/* Return a symbol for the ASCII value associated. */
+static package
+bf_chr(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    Var r;
+    char str[2];
+
+    switch (arglist.v.list[1].type) {
+        case TYPE_INT:
+            if ((arglist.v.list[1].v.num < 1) || (arglist.v.list[1].v.num == 2) || (arglist.v.list[1].v.num > 6 && arglist.v.list[1].v.num < 14)  || (arglist.v.list[1].v.num
+== 27) || (arglist.v.list[1].v.num > 255)) {
+                free_var(arglist);
+                return make_error_pack(E_INVARG);
+            } else if (!is_wizard(progr)) {
+                free_var(arglist);
+                return make_error_pack(E_PERM);
+            }
+            str[0] = (char) arglist.v.list[1].v.num;
+            str[1] = '\0';
+            r.type = TYPE_STR;
+            r.v.str = str_dup(str);
+            break;
+        case TYPE_STR:
+            if (!(r.v.num = (int) arglist.v.list[1].v.str[0])) {
+                free_var(arglist);
+                return make_error_pack(E_INVARG);
+            }
+            r.type = TYPE_INT;
+            break;
+        default:
+            free_var(arglist);
+            return make_error_pack(E_TYPE);
+    }
+
+    free_var(arglist);
+    return make_var_pack(r);
 }
 
 // ============= ANSI ===============
@@ -501,6 +594,8 @@ register_extensions()
     register_function("locate_by_name", 1, 2, bf_locate_by_name, TYPE_STR, TYPE_INT);
     register_function("explode", 1, 2, bf_explode, TYPE_STR, TYPE_STR);
     register_function("occupants", 1, 3, bf_occupants, TYPE_LIST, TYPE_OBJ, TYPE_INT);
+    register_function("locations", 1, 1, bf_locations, TYPE_OBJ);
+    register_function("chr", 1, 1, bf_chr, TYPE_INT);
     // ======== ANSI ===========
     register_function("parse_ansi", 1, 1, bf_parse_ansi, TYPE_STR);
     register_function("remove_ansi", 1, 1, bf_remove_ansi, TYPE_STR);

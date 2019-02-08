@@ -224,7 +224,7 @@ bf_move_write(void *vdata)
 {
     struct bf_move_data *data = (bf_move_data *)vdata;
 
-    dbio_printf("bf_move data: what = %d, where = %d\n",
+    dbio_printf("bf_move data: what = %" PRIdN ", where = %" PRIdN "\n",
 		data->what, data->where);
 }
 
@@ -233,7 +233,7 @@ bf_move_read()
 {
     struct bf_move_data *data = (bf_move_data *)alloc_data(sizeof(*data));
 
-    if (dbio_scanf("bf_move data: what = %d, where = %d\n",
+    if (dbio_scanf("bf_move data: what = %" PRIdN ", where = %" PRIdN "\n",
 		   &data->what, &data->where) == 2)
 	return data;
     else
@@ -244,7 +244,7 @@ static package
 bf_toobj(Var arglist, Byte next, void *vdata, Objid progr)
 {
     Var r;
-    int i;
+    Num i;
     enum error e;
 
     r.type = TYPE_OBJ;
@@ -437,7 +437,7 @@ bf_create(Var arglist, Byte next, void *vdata, Objid progr)
 static void
 bf_create_write(void *vdata)
 {
-    dbio_printf("bf_create data: oid = %d\n", *((Objid *) vdata));
+    dbio_printf("bf_create data: oid = %" PRIdN "\n", *((Objid *) vdata));
 }
 
 static void *
@@ -445,7 +445,7 @@ bf_create_read(void)
 {
     Objid *data = (Objid *)alloc_data(sizeof(Objid));
 
-    if (dbio_scanf("bf_create data: oid = %d\n", data) == 1)
+    if (dbio_scanf("bf_create data: oid = %" PRIdN "\n", data) == 1)
 	return data;
     else
 	return 0;
@@ -828,7 +828,7 @@ bf_destroy_read(void)
      * suppressed assignments are not counted in determining the returned value
      * of `scanf'...
      */
-    if (dbio_scanf("bf_destroy data: oid = %d, cont = %d\n",
+    if (dbio_scanf("bf_destroy data: oid = %" PRIdN ", cont = %" PRIdN "\n",
 		   data, &dummy) == 2)
 	return data;
     else
@@ -911,26 +911,41 @@ bf_object_bytes(Var arglist, Byte next, void *vdata, Objid progr)
 
 static package
 bf_isa(Var arglist, Byte next, void *vdata, Objid progr)
-{				/* (object, parent) */
+{				/* (object, parent, return_object) */
     Var object = arglist.v.list[1];
     Var parent = arglist.v.list[2];
+    bool return_obj = (arglist.v.list[0].v.num > 2 && is_true(arglist.v.list[3]));
 
-    if (!object.is_object() || !parent.is_object()) {
+    if (!object.is_object() || !is_obj_or_list_of_objs(parent)) {
 	free_var(arglist);
 	return make_error_pack(E_TYPE);
     }
     else if (!is_valid(object)) {
 	free_var(arglist);
-	return make_var_pack(Var::new_int(0));
+	return make_var_pack(return_obj ? Var::new_obj(NOTHING) : Var::new_int(0));
     }
-    else if (db_object_isa(object, parent)) {
-	free_var(arglist);
-	return make_var_pack(Var::new_int(1));
+
+    if(parent.type == TYPE_OBJ)
+        if (db_object_isa(object, parent)) {
+            free_var(arglist);
+            return make_var_pack(return_obj ? Var::new_obj(parent.v.obj) : Var::new_int(1));
+        }
+        else {
+            free_var(arglist);
+            return make_var_pack(return_obj ? Var::new_obj(NOTHING) : Var::new_int(0));
+        }
+    else if (parent.type == TYPE_LIST) {
+
+        int parent_length = parent.v.list[0].v.num;
+                free_var(arglist);
+
+        for (int x = 1; x <= parent_length; x++)
+            if (db_object_isa(object, Var::new_obj(parent.v.list[x].v.obj))) {
+                return make_var_pack(return_obj ? Var::new_obj(parent.v.list[x].v.obj) : Var::new_int(1));
+            }
     }
-    else {
-	free_var(arglist);
-	return make_var_pack(Var::new_int(0));
-    }
+
+return make_var_pack(return_obj ? Var::new_obj(NOTHING) : Var::new_int(0));
 }
 
 Var nothing;			/* useful constant */
@@ -974,5 +989,5 @@ register_objects(void)
     register_function_with_read_write("move", 2, 2, bf_move,
 				      bf_move_read, bf_move_write,
 				      TYPE_OBJ, TYPE_OBJ);
-    register_function("isa", 2, 2, bf_isa, TYPE_ANY, TYPE_ANY);
+    register_function("isa", 2, 3, bf_isa, TYPE_ANY, TYPE_ANY, TYPE_INT);
 }

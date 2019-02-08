@@ -22,6 +22,9 @@ AC_CONFIG_HEADERS([config.h])
 
 AC_LANG([C])
 
+: ${CFLAGS=}
+: ${CXXFLAGS=}
+
 dnl ***************************************************************************
 dnl Start of actual configuration tests
 dnl ***************************************************************************
@@ -236,7 +239,7 @@ dnl ***************************************************************************
     if test "$found_sqlite" != "yes" ; then
         AC_MSG_ERROR([SQLite could not be found.])
     else
-        LIBS+=" -lsqlite3"
+        ELIBS=" -lsqlite3"
     fi
 
  dnl ***************************************************************************
@@ -244,7 +247,7 @@ dnl ***************************************************************************
     if test "$found_pthread" != "yes" ; then
         AC_MSG_ERROR([Pthread could not be found.])
     else
-        LIBS+=" -lpthread"
+        ELIBS="${ELIBS} -lpthread"
     fi
 
  dnl ***************************************************************************
@@ -253,15 +256,24 @@ dnl ***************************************************************************
         AC_MSG_ERROR([Argon2 could not be found.])
     else
         AC_DEFINE(HAS_ARGON2)
-        LIBS+=" -largon2"
+        ELIBS="${ELIBS} -largon2"
     fi
 
-dnl ***************************************************************************
+ dnl ***************************************************************************
+    AC_CHECK_HEADER([aspell.h], [found_aspell=yes], [found_aspell=no])
+    if test "$found_aspell" != "yes" ; then
+        AC_MSG_ERROR([Aspell could not be found.])
+    else
+        AC_DEFINE(HAS_ASPELL)
+        ELIBS="${ELIBS} -laspell"
+    fi
+
+ dnl ***************************************************************************
 	AC_CHECK_PROG([PCRE_CONFIG], [pcre-config], [pcre-config], [:])
 	if test "x$PCRE_CONFIG" = "x:"; then
 			AC_MSG_ERROR([PCRE could not be found.])
 	else
-		LIBS+=" `$PCRE_CONFIG --libs`"
+		ELIBS="${ELIBS} `$PCRE_CONFIG --libs`"
 		CFLAGS+=" `$PCRE_CONFIG --cflags`"
 	fi
 
@@ -323,6 +335,7 @@ echo "|"
 echo "|   $NETWORK_CONFIGURATIONS"
 echo "----------------------------------------------------------------------"
 
+AC_SUBST([ELIBS], ["${ELIBS}"])
 AC_OUTPUT(Makefile)
 
 # Local Variables:

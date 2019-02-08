@@ -33,11 +33,11 @@
 #include "db.h" 		// valid
 #include "log.h"        // errlog
 #include "map.h"
-#include <map>
+#include <unordered_map>
 
 static unsigned long waif_count = 0;
-static std::map<Objid, unsigned int> waif_class_count;
-std::map<Waif *, bool> recycled_waifs;
+static std::unordered_map<Objid, unsigned int> waif_class_count;
+std::unordered_map<Waif *, bool> recycled_waifs;
 
 #define PROP_MAPPED(Mmap, Mbit)	((Mmap)[(Mbit) / 32] & (1 << ((Mbit) % 32)))
 #define MAP_PROP(Mmap, Mbit) (Mmap)[(Mbit) / 32] |= 1 << ((Mbit) % 32)
@@ -554,6 +554,8 @@ free_waif(Waif *waif)
 	int i, cnt;
 
     waif_class_count[waif->_class]--;
+    if (waif_class_count[waif->_class] <= 0)
+        waif_class_count.erase(waif->_class);
 	/* assert(refcount(waif) == 0) */
 	cnt = count_waif_propvals(waif);
 	free_waif_propdefs(waif->propdefs);
@@ -611,7 +613,7 @@ register_waif()
 	register_function("waif_stats", 0, 0, bf_waif_stats);
 }
 
-/* Waif proprety permissions are derived from the class object's property
+/* Waif property permissions are derived from the class object's property
  * definition, except that in the case of +c properties waif.owner is
  * considered the owner of the property rather than using the owner in the
  * db_prop_handle.
@@ -830,7 +832,7 @@ write_waif(Var v)
 {
 	Waif *w = v.v.waif;
 	int index;
-	int i, len;
+	Num i, len;
 	unsigned long map[WAIF_MAPSZ];
 	Var *val;
 

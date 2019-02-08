@@ -15,10 +15,12 @@
     Pavel@Xerox.Com
  *****************************************************************************/
 
+#include <sys/socket.h>
 #include <stdlib.h>
 
 #include "my-string.h"
 #include "my-time.h"
+#include "my-in.h"
 
 #include "config.h"
 #include "db.h"
@@ -45,9 +47,11 @@
 #include "utils.h"
 #include "verbs.h"
 #include "version.h"
+#include "name_lookup.h"
 
 #include <sys/time.h>
 #include <math.h>
+#include <arpa/inet.h>
 
 #define ROUND(tvp)	((tvp)->tv_sec + ((tvp)->tv_usec > 500000))
 
@@ -650,12 +654,12 @@ start_programming(tqueue * tq, char *argstr)
 	tq->program_object = db_verb_definer(h).v.obj;
 	tq->program_verb = str_dup(vname);
 #ifdef LOG_CODE_CHANGES
-    oklog("CODE_CHANGE: %s (#%d) set verb #%d:%s via .PROGRAM\n", db_object_name(tq->player), tq->player, tq->program_object, tq->program_verb);
+    oklog("CODE_CHANGE: %s (#%" PRIdN ") set verb #%" PRIdN ":%s via .PROGRAM\n", db_object_name(tq->player), tq->player, tq->program_object, tq->program_verb);
 #endif
     }
 }
 
-struct state {
+struct task_state {
     Objid player;
     int nerrors;
     char *input;
@@ -664,7 +668,7 @@ struct state {
 static void
 my_error(void *data, const char *msg)
 {
-    struct state *s = (state *)data;
+    struct task_state *s = (task_state *)data;
 
     notify(s->player, msg);
     s->nerrors++;
@@ -673,7 +677,7 @@ my_error(void *data, const char *msg)
 static int
 my_getc(void *data)
 {
-    struct state *s = (state *)data;
+    struct task_state *s = (task_state *)data;
 
     if (*(s->input) != '\0')
 	return *(s->input++);
@@ -702,7 +706,7 @@ end_programming(tqueue * tq)
 	if (!h.ptr)
 	    notify(player, "That verb appears to have disappeared ...");
 	else {
-	    struct state s;
+	    struct task_state s;
 	    Program *program;
 	    char buf[30];
 
@@ -923,14 +927,18 @@ do_login_task(tqueue * tq, char *command)
                 split = strtok(NULL, " ");
             }
 
-            // TODO: Resolve DNS names here
-
             static Stream *new_connection_name = 0;
 
             if (!new_connection_name)
                 new_connection_name = new_stream(100);
 
-            stream_printf(new_connection_name, "port %s from %s [%s], port %s", destination_port, source, source, source_port);
+            struct sockaddr_in address;
+            address.sin_family = AF_INET;
+            address.sin_port = htons(atoi(source_port));
+            inet_pton(AF_INET, source, &address.sin_addr);
+            int timeout = server_int_option("name_lookup_timeout", 5);
+
+            stream_printf(new_connection_name, "port %s from %s, port %s", destination_port, lookup_name_from_addr(&address, timeout), source_port);
 
             proxy_connected(tq->player, new_connection_name);
             /* Clear the command so that we don't get an `I don't understand that.` from the proxy command. */
@@ -1100,7 +1108,7 @@ tasks_connection_options(task_queue q, Var list)
 #undef TASK_CO_TABLE
 
 static void
-enqueue_input_task(tqueue * tq, const char *input, int at_front, int binary)
+enqueue_input_task(tqueue * tq, const char *input, int at_front, int binary, bool is_telnet)
 {
     static char oob_prefix[] = OUT_OF_BAND_PREFIX;
     task *t;
@@ -1108,6 +1116,8 @@ enqueue_input_task(tqueue * tq, const char *input, int at_front, int binary)
     t = (task *)mymalloc(sizeof(task), M_TASK);
     if (binary)
 	t->kind = TASK_BINARY;
+    else if (is_telnet)
+        t->kind = TASK_OOB;
     else if (oob_quote_prefix_length > 0
 	     && strncmp(oob_quote_prefix, input, oob_quote_prefix_length) == 0)
 	t->kind = TASK_QUOTED;
@@ -1194,7 +1204,7 @@ flush_input(tqueue * tq, int show_messages)
 }
 
 void
-new_input_task(task_queue q, const char *input, int binary)
+new_input_task(task_queue q, const char *input, int binary, bool out_of_band)
 {
     tqueue *tq = (tqueue *)q.ptr;
 
@@ -1202,7 +1212,7 @@ new_input_task(task_queue q, const char *input, int binary)
 	flush_input(tq, 1);
 	return;
     }
-    enqueue_input_task(tq, input, 0/*at-rear*/, binary);
+    enqueue_input_task(tq, input, 0/*at-rear*/, binary, out_of_band);
 }
 
 static void
@@ -1328,7 +1338,7 @@ enqueue_suspended_task(vm the_vm, void *data)
 
 	when = double_to_start_tv(after_seconds);
     } else {
-	when.tv_sec = INT32_MAX;
+	when.tv_sec = INTNUM_MAX;
 	when.tv_usec = 0;
     }
 
@@ -2861,7 +2871,7 @@ bf_force_input(Var arglist, Byte next, void *vdata, Objid progr)
 	return make_error_pack(E_PERM);
     }
     tq = find_tqueue(conn, 1);
-    enqueue_input_task(tq, line, at_front, 0/*non-binary*/);
+    enqueue_input_task(tq, line, at_front, 0/*non-binary*/, 0 /*non-telnet*/);
     free_var(arglist);
     return no_var_pack();
 }

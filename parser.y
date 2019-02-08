@@ -70,9 +70,9 @@ static void     check_loop_name(const char *, enum loop_exit_kind);
 %union {
   Stmt         *stmt;
   Expr         *expr;
-  int           integer;
+  Num           integer;
   Objid         object;
-  double       *real;
+  double       real;
   char         *string;
   enum error    error;
   Arg_List     *args;
@@ -403,6 +403,16 @@ expr:
 		    prop->e.var.v.str = $3;
 		    $$ = alloc_binary(EXPR_PROP, $1, prop);
 		}
+	| expr '.' ':' tID
+		{
+            /* Waif properties get turned into foo.(":bar") 
+               (we should be using  WAIF_PROP_PREFIX here...) */
+		    Expr *prop = alloc_var(TYPE_STR);
+            char *newstr = (char *)mymalloc(strlen($4) + 1, M_STRING);
+            sprintf(newstr, ":%s", $4);
+		    prop->e.var.v.str = newstr;
+		    $$ = alloc_binary(EXPR_PROP, $1, prop);
+		}
 	| expr '.' '(' expr ')'
 		{
 		    $$ = alloc_binary(EXPR_PROP, $1, $4);
@@ -593,7 +603,7 @@ expr:
 			    $2->e.var.v.num = -$2->e.var.v.num;
 			    break;
 			  case TYPE_FLOAT:
-			    *($2->e.var.v.fnum) = - (*($2->e.var.v.fnum));
+			    $2->e.var.v.fnum = -$2->e.var.v.fnum;
 			    break;
 			  default:
 			    break;
@@ -922,7 +932,7 @@ start_over:
     }
 
     if (isdigit(c) || (c == '.'  &&  language_version >= DBV_Float)) {
-	int	n = 0;
+	Num	n = 0;
 	int	type = tINTEGER;
 
 	while (isdigit(c)) {
@@ -985,7 +995,7 @@ start_over:
 		yyerror("Floating-point literal out of range");
 		d = 0.0;
 	    }
-	    yylval.real = alloc_float(d);
+	    yylval.real = d; 
 	}
 	return type;
     }

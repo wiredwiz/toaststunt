@@ -8,9 +8,6 @@
 #include "utils.h"
 #include "log.h"
 
-#define __STDC_WANT_LIB_EXT1__ 1
-void *erase_from_memory(void *pointer, size_t size_data, size_t size_to_remove);
-
 static package
 bf_argon2(Var arglist, Byte next, void *vdata, Objid progr)
 {
@@ -44,7 +41,7 @@ bf_argon2(Var arglist, Byte next, void *vdata, Objid progr)
     }
 
     size_t encodedlen = argon2_encodedlen(t_cost, m_cost, parallelism, saltlen, outlen, type);
-    char *encoded = (char *)malloc(encodedlen + 1);
+    char *encoded = (char *)mymalloc(encodedlen + 1, M_STRING);
     if (!encoded) {
         free_var(arglist);
         free(out);
@@ -55,18 +52,15 @@ bf_argon2(Var arglist, Byte next, void *vdata, Objid progr)
     if (result != ARGON2_OK) {
         free_var(arglist);
         free(out);
-        free(encoded);
+        myfree(encoded, M_STRING);
         return make_raise_pack(E_INVIND, argon2_error_message(result), var_ref(zero));
     }
 
     Var r;
     r.type = TYPE_STR;
-    r.v.str = str_dup(encoded);
+    r.v.str = encoded;
     free_var(arglist);
-    // This is probably not necessary since we're throwing the encoded string around anyway, but whatever.
-    erase_from_memory(out, outlen, outlen);
     free(out);
-    free(encoded);
 
     return make_var_pack(r);
 }
@@ -96,19 +90,6 @@ bf_argon2_verify(Var arglist, Byte next, void *vdata, Objid progr)
         r.v.num = 1;
 
     return make_var_pack(r);
-}
-
-void *erase_from_memory(void *pointer, size_t size_data, size_t size_to_remove) {
-  #ifdef __STDC_LIB_EXT1__
-   memset_s(pointer, size_data, 0, size_to_remove);
-  #else
-   if(size_to_remove > size_data) size_to_remove = size_data;
-	 volatile unsigned char *p = (volatile unsigned char *)pointer;
-	 while (size_to_remove--){
-		 *p++ = 0;
-	 }
-  #endif
-	return pointer;
 }
 
 void
