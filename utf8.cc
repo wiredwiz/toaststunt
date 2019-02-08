@@ -89,12 +89,12 @@ done:
 
 
 
-const char* utf8_index(const char* str, int32 index)
+const char* utf8_index(const char* str, Num index)
 {
     return utf8_substr(str, index, index);
 }
 
-const char* utf8_substr(const char* str, int32 lower, int32 upper)
+const char* utf8_substr(const char* str, Num lower, Num upper)
 {
     char* p = (char*)str;
     char* start = NULL;
@@ -196,12 +196,12 @@ const char* utf8_substr(const char* str, int32 lower, int32 upper)
     return newstr;
 }
 
-const char* utf8_copyandset(const char* lhs, int32 index, const char* rhs)
+const char* utf8_copyandset(const char* lhs, Num index, const char* rhs)
 {    
     return utf8_strrangeset(lhs, index, index, rhs);
 }
 
-const char* utf8_strrangeset(const char* lhs, int32 from, int32 to, const char* rhs)
+const char* utf8_strrangeset(const char* lhs, Num from, Num to, const char* rhs)
 {
     char* p = (char*)lhs;
     char* newstr = NULL;
@@ -264,7 +264,7 @@ const char* utf8_strrangeset(const char* lhs, int32 from, int32 to, const char* 
     return newstr;
 }
 
-int32 utf8_strindex(const char* big, const char* small, int case_matters)
+Num utf8_strindex(const char* big, const char* small, int case_matters)
 {
     char *p = (char*)big;
     int state = 0;
@@ -337,7 +337,7 @@ int32 utf8_strindex(const char* big, const char* small, int case_matters)
     return 0;
 }
 
-int32 utf8_strrindex(const char* big, const char* small, int case_matters)
+Num utf8_strrindex(const char* big, const char* small, int case_matters)
 {
     char *p = (char*)(big + strlen(big) - 1);
     int n = 1;

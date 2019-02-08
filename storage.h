@@ -21,7 +21,6 @@
 #include "my-string.h"
 
 #include "options.h"
-#include "utf8.h"
 
 /* See "Concurrent Cycle Collection in Reference Counted Systems",
  * (Bacon and Rajan, 2001) for a description of the cycle collection

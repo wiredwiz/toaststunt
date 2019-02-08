@@ -29,6 +29,7 @@
  *****************************************************************************/
 
 #include "my-types.h"
+#include "structures.h"
 #include <ctype.h>
 
 /* Return the length of the string.
@@ -37,19 +38,19 @@ extern size_t utf8_strlen(const char* str);
 
 /* Nice and easy ones. Just give the proper index.
  */
-extern int32 utf8_strindex(const char* big, const char* small, int case_matters);
-extern int32 utf8_strrindex(const char* big, const char* small, int case_matters);
+extern Num utf8_strindex(const char* big, const char* small, int case_matters);
+extern Num utf8_strrindex(const char* big, const char* small, int case_matters);
 
 /* Return value as a newly allocated null-term string.
  */
-extern const char* utf8_index(const char* str, int32 index);
-extern const char* utf8_substr(const char* str, int32 lower, int32 upper);
+extern const char* utf8_index(const char* str, Num index);
+extern const char* utf8_substr(const char* str, Num lower, Num upper);
 
 /* Return a copy of 'lhs' with the provided values changed to 'rhs'.
  * utf8_copyandset just wraps utf8_strrangeset.
  */
-extern const char* utf8_copyandset(const char* lhs, int32 index, const char* rhs);
-extern const char* utf8_strrangeset(const char* lhs, int32 from, int32 to, const char* rhs);
+extern const char* utf8_copyandset(const char* lhs, Num index, const char* rhs);
+extern const char* utf8_strrangeset(const char* lhs, Num from, Num to, const char* rhs);
 
 /* Return a UTF-8 based index of the character where nRealIdx lies,
  * in the string pStr.
