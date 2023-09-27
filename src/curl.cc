@@ -3,6 +3,7 @@
 #ifdef CURL_FOUND
 
 #include <curl/curl.h>
+#include <string>
 
 #include "curl.h"
 #include "functions.h"
